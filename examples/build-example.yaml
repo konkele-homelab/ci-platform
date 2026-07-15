@@ -1,0 +1,90 @@
+name: Build OCI Container Image Example
+
+on:
+  workflow_dispatch:
+
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    uses: your-org/your-repo/.github/workflows/build-oci-container.yaml@main
+
+    with:
+      # Optional registry override
+      # Defaults to vars.CI_REGISTRY when omitted
+      registry: ""
+
+      # Optional registry namespace/project override
+      # Defaults to vars.CI_REGISTRY_NAMESPACE when omitted
+      registry_namespace: ""
+
+      # Optional BuildKit cache namespace/project override
+      # Defaults to ci-cache when omitted
+      #
+      # Cache location:
+      # <registry>/<cache_namespace>/<image>:buildcache-<platform>
+      cache_namespace: ci-cache
+
+      # Required image path within the registry namespace
+      image_name: example-image
+
+      # Runner label
+      runner: ci-build-dev
+
+      # GitHub Actions job container
+      container_image: ghcr.io/actions/actions-runner:latest
+
+      # Target platform(s)
+      platforms: linux/amd64
+
+      # Dockerfile to build
+      dockerfile: Dockerfile
+
+      # Build context
+      context: .
+
+      # Remote BuildKit daemon
+      buildkit_host: tcp://buildkitd.buildkit.svc.cluster.local:1234
+
+      # Optional Dockerfile build arguments
+      # One BUILD_ARG=value per line
+      build_args: |
+        APP_ENV=production
+        BUILD_VERSION=${{ github.sha }}
+
+      # Optional additional metadata-action tags
+      #
+      # Built-in tags still apply:
+      #   - branch
+      #   - pull request
+      #   - sha-<commit>
+      #   - semantic version tags
+      #   - latest on default branch/releases
+      #
+      extra_tags: |
+        type=raw,value=example
+        type=raw,value=build-${{ github.run_number }}
+
+      # Push image to registry
+      push: true
+
+    secrets:
+      # Option 1 (recommended): explicitly pass only required secrets
+      CI_REGISTRY_USERNAME: ${{ secrets.CI_REGISTRY_USERNAME }}
+      CI_REGISTRY_PASSWORD: ${{ secrets.CI_REGISTRY_PASSWORD }}
+
+      # Option 2: inherit all available secrets
+      #
+      # Replace the block above with:
+      #
+      # secrets: inherit
+      #
+      # This passes all secrets available to the calling workflow
+      # into the reusable workflow. Use this only when the reusable
+      # workflow is trusted and you intentionally want it to have
+      # access to all caller secrets.

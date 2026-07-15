@@ -1,0 +1,260 @@
+name: Build OCI Container Image
+
+on:
+  workflow_call:
+    inputs:
+      registry:
+        description: "OCI registry hostname (example: harbor.example.com)"
+        required: false
+        type: string
+
+      registry_namespace:
+        description: "OCI registry namespace/project for images"
+        required: false
+        type: string
+
+      cache_namespace:
+        description: "OCI registry namespace/project for BuildKit cache storage"
+        required: false
+        default: ci-cache
+        type: string
+
+      image_name:
+        description: "Registry image path (example: applications/my-app)"
+        required: true
+        type: string
+
+      runner:
+        description: "Runner label to execute the build"
+        required: false
+        default: ci-build
+        type: string
+
+      container_image:
+        description: "Container image used for the GitHub Actions job"
+        required: false
+        default: ghcr.io/actions/actions-runner:latest
+        type: string
+
+      platforms:
+        description: "Target platform(s)"
+        required: false
+        default: linux/amd64
+        type: string
+
+      dockerfile:
+        description: "Dockerfile path"
+        required: false
+        default: Dockerfile
+        type: string
+
+      context:
+        description: "Build context directory"
+        required: false
+        default: .
+        type: string
+
+      buildkit_host:
+        description: "Remote BuildKit endpoint"
+        required: false
+        default: tcp://buildkitd.buildkit.svc.cluster.local:1234
+        type: string
+
+      build_args:
+        description: |
+          Build arguments.
+          One BUILD_ARG=value per line.
+        required: false
+        default: ""
+        type: string
+
+      extra_tags:
+        description: |
+          Optional additional metadata-action tags.
+        required: false
+        default: ""
+        type: string
+
+      push:
+        description: "Push image to Registry"
+        required: false
+        default: true
+        type: boolean
+
+    secrets:
+      CI_REGISTRY_USERNAME:
+        required: true
+
+      CI_REGISTRY_PASSWORD:
+        required: true
+
+
+permissions:
+  contents: read
+
+
+env:
+  REGISTRY: ${{ inputs.registry || vars.CI_REGISTRY }}
+  REGISTRY_NAMESPACE: ${{ inputs.registry_namespace || vars.CI_REGISTRY_NAMESPACE }}
+
+
+jobs:
+  build:
+
+    name: Build ${{ inputs.image_name }}
+
+    concurrency:
+      group: build-${{ github.repository }}-${{ inputs.image_name }}-${{ github.ref }}
+      cancel-in-progress: true
+
+    runs-on:
+      - ${{ inputs.runner }}
+
+    container:
+      image: ${{ inputs.container_image }}
+
+
+    steps:
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+
+      - name: Verify Build Tools
+        run: |
+          docker --version
+          docker buildx version
+
+
+      - name: Login to OCI Registry
+        if: inputs.push
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.CI_REGISTRY_USERNAME }}
+          password: ${{ secrets.CI_REGISTRY_PASSWORD }}
+
+
+      - name: Configure Remote BuildKit Builder
+        env:
+          BUILDKIT_HOST: ${{ inputs.buildkit_host }}
+
+        run: |
+          docker buildx create \
+            --name remote \
+            --driver remote \
+            --use \
+            "${BUILDKIT_HOST}" || docker buildx use remote
+
+          docker buildx inspect --bootstrap
+
+
+      - name: Generate OCI Metadata
+        id: meta
+        uses: docker/metadata-action@v5
+
+        with:
+          images: |
+            ${{ env.REGISTRY }}/${{ env.REGISTRY_NAMESPACE }}/${{ inputs.image_name }}
+
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+
+            type=sha,prefix=sha-
+
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}
+            type=semver,pattern={{major}}.{{minor}}
+
+            # Latest on default branch and semantic version releases
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+
+            ${{ inputs.extra_tags }}
+
+          labels: |
+            org.opencontainers.image.title=${{ inputs.image_name }}
+            org.opencontainers.image.description=${{ github.event.repository.description }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.url=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.documentation=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.vendor=${{ github.repository_owner }}
+            org.opencontainers.image.authors=${{ github.repository_owner }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ github.ref_name }}
+            org.opencontainers.image.created={{date 'YYYY-MM-DDTHH:mm:ssZ'}}
+
+
+      - name: Build and Push OCI Image
+        env:
+          IMAGE_TAGS: ${{ steps.meta.outputs.tags }}
+          IMAGE_LABELS: ${{ steps.meta.outputs.labels }}
+
+        shell: bash
+
+        run: |
+          set -euo pipefail
+
+
+          TAG_ARGS=()
+
+          while IFS= read -r tag; do
+            [[ -z "${tag}" ]] && continue
+            TAG_ARGS+=(--tag "${tag}")
+          done <<< "${IMAGE_TAGS}"
+
+
+          LABEL_ARGS=()
+
+          while IFS= read -r label; do
+            [[ -z "${label}" ]] && continue
+            LABEL_ARGS+=(--label "${label}")
+          done <<< "${IMAGE_LABELS}"
+
+
+          BUILD_ARGS=(
+            --build-arg "REGISTRY=${REGISTRY}"
+            --build-arg "REGISTRY_NAMESPACE=${REGISTRY_NAMESPACE}"
+          )
+
+
+          while IFS= read -r arg; do
+            [[ -z "${arg}" ]] && continue
+            BUILD_ARGS+=(--build-arg "${arg}")
+          done <<< "${{ inputs.build_args }}"
+
+
+          CACHE_SUFFIX=$(echo "${{ inputs.platforms }}" | tr '/, ' '---')
+
+          CACHE_REF="${REGISTRY}/${{ inputs.cache_namespace }}/${{ inputs.image_name }}:buildcache-${CACHE_SUFFIX}"
+
+
+          docker buildx build \
+            --builder remote \
+            --file "${{ inputs.dockerfile }}" \
+            --platform "${{ inputs.platforms }}" \
+            "${TAG_ARGS[@]}" \
+            "${LABEL_ARGS[@]}" \
+            "${BUILD_ARGS[@]}" \
+            --cache-from type=registry,ref="${CACHE_REF}" \
+            --cache-to type=registry,ref="${CACHE_REF}",mode=max \
+            --provenance=false \
+            --sbom=false \
+            ${{ inputs.push && '--push' || '--load' }} \
+            "${{ inputs.context }}"
+
+
+      - name: Verify Published Artifacts
+        if: inputs.push
+        run: |
+          CACHE_SUFFIX=$(echo "${{ inputs.platforms }}" | tr '/, ' '---')
+
+          CACHE_REF="${REGISTRY}/${{ inputs.cache_namespace }}/${{ inputs.image_name }}:buildcache-${CACHE_SUFFIX}"
+
+          echo "Published Image Tags:"
+          echo "${{ steps.meta.outputs.tags }}"
+
+          echo ""
+          echo "Build Cache:"
+          echo "${CACHE_REF}"

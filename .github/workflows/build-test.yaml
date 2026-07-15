@@ -1,0 +1,24 @@
+name: Build Test Image
+
+on:
+  workflow_dispatch:
+
+  push:
+    tags:
+      - "v*.*.*"
+
+jobs:
+  build:
+    uses: konkele-homelab/ci-platform/.github/workflows/build-oci-container.yaml@main
+
+    secrets:
+      CI_REGISTRY_USERNAME: ${{ secrets.CI_REGISTRY_USERNAME }}
+      CI_REGISTRY_PASSWORD: ${{ secrets.CI_REGISTRY_PASSWORD }}
+
+    with:
+      image_name: test-image
+      dockerfile: images/test/Dockerfile
+      runner: ci-build-dev
+
+      extra_tags: |
+        type=raw,value=test
