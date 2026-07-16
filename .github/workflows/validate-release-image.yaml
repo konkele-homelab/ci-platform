@@ -1,0 +1,50 @@
+name: Validate Release Image
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Image tag to validate"
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  prepare:
+    runs-on: ci-build
+
+    container:
+      image: ghcr.io/actions/actions-runner:latest
+
+    outputs:
+      image_tag: ${{ steps.tag.outputs.image_tag }}
+
+    steps:
+      - id: tag
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            echo "image_tag=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          else
+            echo "image_tag=${{ inputs.image_tag }}" >> "$GITHUB_OUTPUT"
+          fi
+
+  validate:
+    needs: prepare
+
+    uses: konkele-homelab/ci-platform/.github/workflows/validate-oci-container.yaml@v1
+
+    secrets:
+      CI_REGISTRY_USERNAME: ${{ secrets.CI_REGISTRY_USERNAME }}
+      CI_REGISTRY_PASSWORD: ${{ secrets.CI_REGISTRY_PASSWORD }}
+
+    with:
+      image_name: ci-platform-test-image
+      image_tag: ${{ needs.prepare.outputs.image_tag }}
+      runner: ci-build
+      test_command: cat /message.txt

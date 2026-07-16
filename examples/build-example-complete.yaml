@@ -9,7 +9,7 @@ on:
 
 jobs:
   build:
-    uses: your-org/your-repo/.github/workflows/build-oci-container.yaml@main
+    uses: your-org/your-repo/.github/workflows/build-oci-container.yaml@<release-tag>
 
     with:
       # Optional registry override

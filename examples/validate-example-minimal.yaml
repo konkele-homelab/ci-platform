@@ -1,0 +1,22 @@
+name: Validate OCI Container Image Example
+
+on:
+  workflow_dispatch:
+
+  push:
+    tags:
+      - "v*.*.*"
+
+jobs:
+  validate:
+    uses: konkele-homelab/ci-platform/.github/workflows/validate-oci-container.yaml@v1
+
+    secrets:
+      CI_REGISTRY_USERNAME: ${{ secrets.CI_REGISTRY_USERNAME }}
+      CI_REGISTRY_PASSWORD: ${{ secrets.CI_REGISTRY_PASSWORD }}
+
+    with:
+      image_name: example-image
+      image_tag: latest
+      runner: ci-build
+      test_command: cat /message.txt

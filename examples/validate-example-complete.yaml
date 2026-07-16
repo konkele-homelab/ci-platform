@@ -1,0 +1,56 @@
+name: Validate OCI Container Image Example
+
+on:
+  workflow_dispatch:
+
+  push:
+    tags:
+      - "v*.*.*"
+
+jobs:
+  validate:
+    uses: your-org/your-repo/.github/workflows/validate-oci-container.yaml@<release-tag>
+
+    with:
+      # Optional registry override
+      # Defaults to vars.CI_REGISTRY when omitted
+      registry: ""
+
+      # Optional registry namespace/project override
+      # Defaults to vars.CI_REGISTRY_NAMESPACE when omitted
+      registry_namespace: ""
+
+      # Required image path within the registry namespace
+      image_name: example-image
+
+      # Image tag to validate
+      image_tag: latest
+
+      # Runner label
+      runner: ci-build
+
+      # GitHub Actions job container
+      container_image: ghcr.io/actions/actions-runner:latest
+
+      # Optional command executed inside the container
+      test_command: |
+        cat /message.txt
+
+      # Only verify authentication and image pull
+      pull_only: false
+
+    secrets:
+      # Option 1 (recommended): explicitly pass only required secrets
+      CI_REGISTRY_USERNAME: ${{ secrets.CI_REGISTRY_USERNAME }}
+      CI_REGISTRY_PASSWORD: ${{ secrets.CI_REGISTRY_PASSWORD }}
+
+      # Option 2: inherit all available secrets
+      #
+      # Replace the block above with:
+      #
+      # secrets: inherit
+      #
+      # This passes all secrets available to the calling workflow
+      # into the reusable workflow. Use this only when the reusable
+      # workflow is trusted and you intentionally want it to have
+      # access to all caller secrets.

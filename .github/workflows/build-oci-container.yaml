@@ -1,4 +1,4 @@
-name: Build OCI Container Image
+name: Build OCI Image
 
 on:
   workflow_call:
@@ -88,20 +88,17 @@ on:
       CI_REGISTRY_PASSWORD:
         required: true
 
-
 permissions:
   contents: read
-
 
 env:
   REGISTRY: ${{ inputs.registry || vars.CI_REGISTRY }}
   REGISTRY_NAMESPACE: ${{ inputs.registry_namespace || vars.CI_REGISTRY_NAMESPACE }}
 
-
 jobs:
   build:
-
     name: Build ${{ inputs.image_name }}
+    timeout-minutes: 60
 
     concurrency:
       group: build-${{ github.repository }}-${{ inputs.image_name }}-${{ github.ref }}
@@ -113,18 +110,14 @@ jobs:
     container:
       image: ${{ inputs.container_image }}
 
-
     steps:
-
       - name: Checkout repository
         uses: actions/checkout@v4
-
 
       - name: Verify Build Tools
         run: |
           docker --version
           docker buildx version
-
 
       - name: Login to OCI Registry
         if: inputs.push
@@ -134,11 +127,9 @@ jobs:
           username: ${{ secrets.CI_REGISTRY_USERNAME }}
           password: ${{ secrets.CI_REGISTRY_PASSWORD }}
 
-
       - name: Configure Remote BuildKit Builder
         env:
           BUILDKIT_HOST: ${{ inputs.buildkit_host }}
-
         run: |
           docker buildx create \
             --name remote \
@@ -148,11 +139,9 @@ jobs:
 
           docker buildx inspect --bootstrap
 
-
       - name: Generate OCI Metadata
         id: meta
         uses: docker/metadata-action@v5
-
         with:
           images: |
             ${{ env.REGISTRY }}/${{ env.REGISTRY_NAMESPACE }}/${{ inputs.image_name }}
@@ -185,50 +174,41 @@ jobs:
             org.opencontainers.image.version=${{ github.ref_name }}
             org.opencontainers.image.created={{date 'YYYY-MM-DDTHH:mm:ssZ'}}
 
-
-      - name: Build and Push OCI Image
+      - name: Build OCI Image
         env:
           IMAGE_TAGS: ${{ steps.meta.outputs.tags }}
           IMAGE_LABELS: ${{ steps.meta.outputs.labels }}
-
         shell: bash
-
         run: |
           set -euo pipefail
-
 
           TAG_ARGS=()
 
           while IFS= read -r tag; do
-            [[ -z "${tag}" ]] && continue
-            TAG_ARGS+=(--tag "${tag}")
-          done <<< "${IMAGE_TAGS}"
-
+            [[ -z "$tag" ]] && continue
+            TAG_ARGS+=(--tag "$tag")
+          done <<< "$IMAGE_TAGS"
 
           LABEL_ARGS=()
 
           while IFS= read -r label; do
-            [[ -z "${label}" ]] && continue
-            LABEL_ARGS+=(--label "${label}")
-          done <<< "${IMAGE_LABELS}"
-
+            [[ -z "$label" ]] && continue
+            LABEL_ARGS+=(--label "$label")
+          done <<< "$IMAGE_LABELS"
 
           BUILD_ARGS=(
             --build-arg "REGISTRY=${REGISTRY}"
             --build-arg "REGISTRY_NAMESPACE=${REGISTRY_NAMESPACE}"
           )
 
-
           while IFS= read -r arg; do
-            [[ -z "${arg}" ]] && continue
-            BUILD_ARGS+=(--build-arg "${arg}")
+            [[ -z "$arg" || "$arg" =~ ^# ]] && continue
+            BUILD_ARGS+=(--build-arg "$arg")
           done <<< "${{ inputs.build_args }}"
 
-
-          CACHE_SUFFIX=$(echo "${{ inputs.platforms }}" | tr '/, ' '---')
+          CACHE_SUFFIX=$(tr '/, ' '---' <<< "${{ inputs.platforms }}")
 
           CACHE_REF="${REGISTRY}/${{ inputs.cache_namespace }}/${{ inputs.image_name }}:buildcache-${CACHE_SUFFIX}"
-
 
           docker buildx build \
             --builder remote \
@@ -244,17 +224,21 @@ jobs:
             ${{ inputs.push && '--push' || '--load' }} \
             "${{ inputs.context }}"
 
-
       - name: Verify Published Artifacts
         if: inputs.push
+        shell: bash
         run: |
-          CACHE_SUFFIX=$(echo "${{ inputs.platforms }}" | tr '/, ' '---')
+          CACHE_SUFFIX=$(tr '/, ' '---' <<< "${{ inputs.platforms }}")
 
           CACHE_REF="${REGISTRY}/${{ inputs.cache_namespace }}/${{ inputs.image_name }}:buildcache-${CACHE_SUFFIX}"
 
-          echo "Published Image Tags:"
-          echo "${{ steps.meta.outputs.tags }}"
+          while IFS= read -r tag; do
+            [[ -z "$tag" ]] && continue
 
-          echo ""
+            echo "Verifying ${tag}"
+            docker buildx imagetools inspect "${tag}"
+          done <<< "${{ steps.meta.outputs.tags }}"
+
+          echo
           echo "Build Cache:"
           echo "${CACHE_REF}"
