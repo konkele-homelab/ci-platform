@@ -1,0 +1,64 @@
+name: Build Validation Image
+
+on:
+  workflow_dispatch:
+
+  push:
+    branches:
+      - main
+
+    paths:
+      - "images/validation/**"
+      - ".github/workflows/build-validation-image.yaml"
+
+
+permissions:
+  contents: read
+
+
+jobs:
+  build:
+    name: Build Validation Image
+
+    uses: ./.github/workflows/build-container.yaml
+
+    with:
+      image_name: ci-validation
+      dockerfile: images/validation/Dockerfile
+      runner: ci-build
+
+      extra_tags: |
+        type=raw,value=latest
+
+    secrets: inherit
+
+
+  smoke:
+    name: Smoke Test Validation Runtime
+
+    needs:
+      - build
+
+    uses: ./.github/workflows/smoke-container.yaml
+
+    with:
+      image: ${{ needs.build.outputs.reference }}
+      command: crane version
+
+    secrets: inherit
+
+
+  validate:
+    name: Validate Validation Image
+
+    needs:
+      - build
+      - smoke
+
+    uses: ./.github/workflows/validate-container.yaml
+
+    with:
+      tags: ${{ needs.build.outputs.tags }}
+      container_image: ${{ needs.build.outputs.reference }}
+
+    secrets: inherit

@@ -1,5 +1,8 @@
-FROM alpine:3.22
+FROM alpine:3.23
 
-RUN echo "Hello from BuildKit + ARC + Harbor" > /message.txt
+LABEL org.opencontainers.image.title="CI Test Image" \
+      org.opencontainers.image.description="Minimal runtime validation image"
 
-CMD ["cat", "/message.txt"]
+RUN printf '%s\n' "Hello from the CI validation container" > /message.txt
+
+CMD ["sh", "-c", "while true; do sleep 3600; done"]

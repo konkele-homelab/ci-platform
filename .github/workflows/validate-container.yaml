@@ -1,0 +1,143 @@
+name: Validate Container Images
+
+on:
+  workflow_call:
+
+    inputs:
+      tags:
+        description: |
+          Newline-separated list of fully-qualified OCI image tags
+          to validate.
+        required: true
+        type: string
+
+      runner:
+        description: Runner label
+        required: false
+        default: ci-build
+        type: string
+
+      registry:
+        description: |
+          OCI registry hostname used for crane authentication.
+          Defaults to CI_REGISTRY.
+        required: false
+        type: string
+
+      container_image:
+        description: |
+          Validation container image containing crane.
+        required: true
+        type: string
+
+
+    secrets:
+      CI_REGISTRY_USERNAME:
+        required: true
+
+      CI_REGISTRY_PASSWORD:
+        required: true
+
+
+permissions:
+  contents: read
+
+
+env:
+  REGISTRY: ${{ inputs.registry || vars.CI_REGISTRY }}
+
+
+jobs:
+  validate:
+    name: Validate Published OCI Images
+
+    timeout-minutes: 10
+
+    runs-on:
+      - ${{ inputs.runner }}
+
+
+    container:
+      image: ${{ inputs.container_image }}
+
+      credentials:
+        username: ${{ secrets.CI_REGISTRY_USERNAME }}
+        password: ${{ secrets.CI_REGISTRY_PASSWORD }}
+
+
+    steps:
+      - name: Verify validation inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${{ inputs.tags }}" ]]; then
+            echo "No image tags supplied for validation."
+            exit 1
+          fi
+
+
+      - name: Authenticate crane with OCI registry
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          crane auth login \
+            "${REGISTRY}" \
+            --username "${{ secrets.CI_REGISTRY_USERNAME }}" \
+            --password "${{ secrets.CI_REGISTRY_PASSWORD }}"
+
+
+      - name: Validate published OCI images
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo "Using validation runtime:"
+          crane version
+          echo
+
+
+          while IFS= read -r tag; do
+            [[ -z "${tag}" ]] && continue
+
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo "Validating ${tag}"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+
+            echo
+            echo "Digest"
+            crane digest "${tag}"
+
+
+            echo
+            echo "Manifest"
+            crane manifest "${tag}" >/dev/null
+
+
+            echo
+            echo "Configuration"
+            crane config "${tag}" >/dev/null
+
+
+            echo
+            echo "✓ ${tag}"
+
+          done <<< "${{ inputs.tags }}"
+
+
+      - name: Validation summary
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo
+          echo "Successfully validated:"
+          echo
+
+
+          while IFS= read -r tag; do
+            [[ -z "${tag}" ]] && continue
+            echo "  ✓ ${tag}"
+          done <<< "${{ inputs.tags }}"

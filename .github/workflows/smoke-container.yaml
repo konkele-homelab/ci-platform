@@ -1,0 +1,116 @@
+name: Smoke Container Runtime
+
+on:
+  workflow_call:
+
+    inputs:
+      image:
+        description: Fully-qualified OCI image reference
+        required: true
+        type: string
+
+      runner:
+        description: Runner label
+        required: false
+        default: ci-build
+        type: string
+
+      expected_file:
+        description: |
+          Optional file expected to exist inside the container.
+        required: false
+        default: ""
+        type: string
+
+      command:
+        description: |
+          Optional command to execute inside the container.
+        required: false
+        default: ""
+        type: string
+
+
+    secrets:
+      CI_REGISTRY_USERNAME:
+        required: true
+
+      CI_REGISTRY_PASSWORD:
+        required: true
+
+
+permissions:
+  contents: read
+
+
+jobs:
+  smoke:
+    name: Runtime Smoke Test
+
+    timeout-minutes: 10
+
+    runs-on:
+      - ${{ inputs.runner }}
+
+    container:
+      image: ${{ inputs.image }}
+
+      credentials:
+        username: ${{ secrets.CI_REGISTRY_USERNAME }}
+        password: ${{ secrets.CI_REGISTRY_PASSWORD }}
+
+
+    steps:
+      - name: Verify container startup
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo "Container started successfully."
+
+
+      - name: Display image reference
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo "Image:"
+          echo "  ${{ inputs.image }}"
+
+
+      - name: Execute runtime command
+        if: inputs.command != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo "Running:"
+          echo "${{ inputs.command }}"
+
+          ${{ inputs.command }}
+
+
+      - name: Verify expected file
+        if: inputs.expected_file != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ -f "${{ inputs.expected_file }}" ]]; then
+            echo
+            echo "Found:"
+            echo "${{ inputs.expected_file }}"
+            echo
+
+            cat "${{ inputs.expected_file }}"
+          else
+            echo "Expected file not found:"
+            echo "${{ inputs.expected_file }}"
+            exit 1
+          fi
+
+
+      - name: Smoke test passed
+        shell: bash
+        run: |
+          echo
+          echo "✓ Runtime validation succeeded."

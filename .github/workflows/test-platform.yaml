@@ -1,0 +1,64 @@
+name: Test CI Platform
+
+on:
+  workflow_dispatch:
+
+  push:
+    branches:
+      - main
+
+    paths:
+      - ".github/workflows/**"
+      - "images/test/**"
+      - "images/validation/**"
+
+
+permissions:
+  contents: read
+
+
+jobs:
+  build:
+    name: Build Platform Test Image
+
+    uses: ./.github/workflows/build-container.yaml
+
+    with:
+      image_name: ci-platform-test-image
+      dockerfile: images/test/Dockerfile
+      runner: ci-build
+
+      extra_tags: |
+        type=raw,value=test
+
+    secrets: inherit
+
+
+  smoke:
+    name: Smoke Test Platform Image
+
+    needs:
+      - build
+
+    uses: ./.github/workflows/smoke-container.yaml
+
+    with:
+      image: ${{ needs.build.outputs.reference }}
+      expected_file: /message.txt
+
+    secrets: inherit
+
+
+  validate:
+    name: Validate Platform Image
+
+    needs:
+      - build
+      - smoke
+
+    uses: ./.github/workflows/validate-container.yaml
+
+    with:
+      tags: ${{ needs.build.outputs.tags }}
+
+    secrets: inherit
