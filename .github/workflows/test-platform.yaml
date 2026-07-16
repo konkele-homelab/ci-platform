@@ -60,5 +60,6 @@ jobs:
 
     with:
       tags: ${{ needs.build.outputs.tags }}
+      image: ${{ needs.build.outputs.reference }}
 
     secrets: inherit

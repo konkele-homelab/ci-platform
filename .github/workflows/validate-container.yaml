@@ -24,7 +24,7 @@ on:
         required: false
         type: string
 
-      container_image:
+      image:
         description: |
           Validation container image containing crane.
         required: true
@@ -58,7 +58,7 @@ jobs:
 
 
     container:
-      image: ${{ inputs.container_image }}
+      image: ${{ inputs.image }}
 
       credentials:
         username: ${{ secrets.CI_REGISTRY_USERNAME }}
