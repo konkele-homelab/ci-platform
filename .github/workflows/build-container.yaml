@@ -148,6 +148,7 @@ jobs:
 
       - name: Configure Remote BuildKit Builder
         id: builder
+        shell: bash
         env:
           BUILDKIT_HOST: ${{ inputs.buildkit_host }}
         run: |
