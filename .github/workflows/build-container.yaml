@@ -166,6 +166,66 @@ jobs:
           docker buildx use "${BUILDER}"
           docker buildx inspect --bootstrap
 
+      - name: Debug GitHub Runtime
+        shell: bash
+        run: |
+          set +e
+
+          echo "=================================================="
+          echo "GitHub Environment"
+          echo "=================================================="
+
+          echo "GITHUB_ACTIONS=${GITHUB_ACTIONS}"
+          echo "GITHUB_EVENT_NAME=${GITHUB_EVENT_NAME}"
+          echo "GITHUB_REF=${GITHUB_REF}"
+          echo "GITHUB_REF_NAME=${GITHUB_REF_NAME}"
+          echo "GITHUB_SHA=${GITHUB_SHA}"
+          echo "GITHUB_REPOSITORY=${GITHUB_REPOSITORY}"
+          echo "GITHUB_WORKSPACE=${GITHUB_WORKSPACE}"
+          echo "GITHUB_EVENT_PATH=${GITHUB_EVENT_PATH}"
+
+          echo
+          echo "=================================================="
+          echo "Filesystem"
+          echo "=================================================="
+
+          pwd
+
+          echo
+          echo "/github"
+          ls -al /github || true
+
+          echo
+          echo "/github/workflow"
+          ls -al /github/workflow || true
+
+          echo
+          echo "Workspace"
+          ls -al "${GITHUB_WORKSPACE}" || true
+
+          echo
+          echo "=================================================="
+          echo "Environment"
+          echo "=================================================="
+
+          env | sort
+
+          echo
+          echo "=================================================="
+          echo "Event File"
+          echo "=================================================="
+
+          if [ -f "${GITHUB_EVENT_PATH}" ]; then
+            echo "Event file exists."
+            echo
+            cat "${GITHUB_EVENT_PATH}"
+          else
+            echo "Event file does NOT exist."
+          fi
+
+          echo
+          echo "=================================================="
+
       - name: Generate OCI Metadata
         id: meta
         uses: docker/metadata-action@v5
