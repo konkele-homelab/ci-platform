@@ -18,7 +18,7 @@ jobs:
     with:
       image_name: test-image
       dockerfile: images/test/Dockerfile
-      runner: ci-build-dev
+      runner: ci-build
 
       extra_tags: |
         type=raw,value=test

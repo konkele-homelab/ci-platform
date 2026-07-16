@@ -7,9 +7,6 @@ on:
     tags:
       - "v*.*.*"
 
-permissions:
-  contents: read
-
 jobs:
   build:
     uses: your-org/your-repo/.github/workflows/build-oci-container.yaml@main
@@ -34,7 +31,7 @@ jobs:
       image_name: example-image
 
       # Runner label
-      runner: ci-build-dev
+      runner: ci-build
 
       # GitHub Actions job container
       container_image: ghcr.io/actions/actions-runner:latest
