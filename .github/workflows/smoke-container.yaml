@@ -61,17 +61,15 @@ jobs:
 
     steps:
       - name: Verify container startup
-        shell: bash
         run: |
-          set -euo pipefail
+          set -eu
 
           echo "Container started successfully."
 
 
       - name: Display image reference
-        shell: bash
         run: |
-          set -euo pipefail
+          set -eu
 
           echo "Image:"
           echo "  ${{ inputs.image }}"
@@ -79,9 +77,8 @@ jobs:
 
       - name: Execute runtime command
         if: inputs.command != ''
-        shell: bash
         run: |
-          set -euo pipefail
+          set -eu
 
           echo "Running:"
           echo "${{ inputs.command }}"
@@ -91,11 +88,10 @@ jobs:
 
       - name: Verify expected file
         if: inputs.expected_file != ''
-        shell: bash
         run: |
-          set -euo pipefail
+          set -eu
 
-          if [[ -f "${{ inputs.expected_file }}" ]]; then
+          if [ -f "${{ inputs.expected_file }}" ]; then
             echo
             echo "Found:"
             echo "${{ inputs.expected_file }}"
@@ -110,7 +106,6 @@ jobs:
 
 
       - name: Smoke test passed
-        shell: bash
         run: |
           echo
           echo "✓ Runtime validation succeeded."
