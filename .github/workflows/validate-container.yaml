@@ -6,7 +6,7 @@ on:
     inputs:
       tags:
         description: |
-          Comma-separated list of fully-qualified OCI image tags
+          Newline-separated list of fully-qualified OCI image tags
           to validate.
         required: true
         type: string
@@ -20,6 +20,7 @@ on:
       registry:
         description: |
           OCI registry hostname used for crane authentication.
+          Example: harbor.example.com
         required: false
         type: string
 
@@ -56,50 +57,72 @@ jobs:
         password: ${{ secrets.CI_REGISTRY_PASSWORD }}
 
     steps:
+
       - name: Verify validation inputs
+        shell: bash
         env:
           IMAGE_TAGS: ${{ inputs.tags }}
         run: |
-          set -eu
+          set -euo pipefail
 
           if [ -z "${IMAGE_TAGS}" ]; then
             echo "No image tags supplied for validation."
             exit 1
           fi
 
+          echo "Images to validate:"
+          printf '%s\n' "${IMAGE_TAGS}"
+
       - name: Authenticate crane with OCI registry
+        shell: bash
         env:
           INPUT_REGISTRY: ${{ inputs.registry }}
           IMAGE_TAGS: ${{ inputs.tags }}
+          USERNAME: ${{ secrets.CI_REGISTRY_USERNAME }}
+          PASSWORD: ${{ secrets.CI_REGISTRY_PASSWORD }}
         run: |
-          set -eu
+          set -euo pipefail
 
           REGISTRY="${INPUT_REGISTRY}"
 
           if [ -z "${REGISTRY}" ]; then
-            REGISTRY=$(printf '%s' "${IMAGE_TAGS}" | cut -d, -f1 | cut -d/ -f1)
+            FIRST_IMAGE="$(printf '%s\n' "${IMAGE_TAGS}" | sed '/^$/d' | head -n1)"
+
+            if [ -z "${FIRST_IMAGE}" ]; then
+              echo "Unable to determine registry from image tags."
+              exit 1
+            fi
+
+            REGISTRY="$(echo "${FIRST_IMAGE}" | cut -d/ -f1)"
           fi
+
+          echo "Authenticating crane against:"
+          echo "${REGISTRY}"
 
           crane auth login \
             "${REGISTRY}" \
-            --username "${{ secrets.CI_REGISTRY_USERNAME }}" \
-            --password "${{ secrets.CI_REGISTRY_PASSWORD }}"
+            --username "${USERNAME}" \
+            --password "${PASSWORD}"
+
 
       - name: Validate published OCI images
+        shell: bash
         env:
           IMAGE_TAGS: ${{ inputs.tags }}
         run: |
-          set -eu
+          set -euo pipefail
 
           echo "Using validation runtime:"
           crane version
           echo
 
-          printf '%s' "${IMAGE_TAGS}" | tr ',' '\n' | while IFS= read -r tag; do
+          printf '%s\n' "${IMAGE_TAGS}" | while IFS= read -r tag; do
+
             [ -z "${tag}" ] && continue
 
             echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            echo "Validating ${tag}"
+            echo "Validating:"
+            echo "${tag}"
             echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
             crane digest "${tag}"
@@ -107,17 +130,20 @@ jobs:
             crane config "${tag}" >/dev/null
 
             echo "✓ ${tag}"
+            echo
+
           done
 
       - name: Validation summary
+        shell: bash
         env:
           IMAGE_TAGS: ${{ inputs.tags }}
         run: |
-          set -eu
+          set -euo pipefail
 
           echo "Successfully validated:"
 
-          printf '%s' "${IMAGE_TAGS}" | tr ',' '\n' | while IFS= read -r tag; do
+          printf '%s\n' "${IMAGE_TAGS}" | while IFS= read -r tag; do
             [ -z "${tag}" ] && continue
             echo "  ✓ ${tag}"
           done
