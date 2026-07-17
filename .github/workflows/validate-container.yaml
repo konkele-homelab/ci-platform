@@ -17,8 +17,7 @@ on:
         type: string
 
       registry:
-        description: |
-          OCI registry hostname used for crane authentication.
+        description: OCI registry hostname
         required: false
         type: string
 
@@ -40,11 +39,18 @@ on:
 permissions:
   contents: read
 
+env:
+  REGISTRY: ${{ inputs.registry || vars.CI_REGISTRY }}
+
 jobs:
   validate:
     name: Validate Published OCI Images
 
     timeout-minutes: 10
+
+    concurrency:
+      group: validate-${{ github.repository }}-${{ github.workflow }}-${{ github.ref }}
+      cancel-in-progress: true
 
     runs-on:
       - ${{ inputs.runner }}
@@ -54,29 +60,21 @@ jobs:
 
     env:
       IMAGE_TAGS: ${{ inputs.tags }}
-      INPUT_REGISTRY: ${{ inputs.registry }}
 
     steps:
-      - name: Install crane
+      - name: Validate registry configuration
         shell: sh
         run: |
           set -eu
 
-          apk add --no-cache ca-certificates curl tar
+          if [ -z "${REGISTRY}" ]; then
+            echo "Registry is not configured."
+            echo "Set inputs.registry or repository variable CI_REGISTRY."
+            exit 1
+          fi
 
-          curl -sL \
-            https://github.com/google/go-containerregistry/releases/latest/download/go-containerregistry_Linux_x86_64.tar.gz \
-            | tar -xz -C /usr/local/bin crane
-
-          chmod +x /usr/local/bin/crane
-
-          crane version
-
-      - name: Authenticate crane
+      - name: Validate input images
         shell: sh
-        env:
-          USERNAME: ${{ secrets.CI_REGISTRY_USERNAME }}
-          PASSWORD: ${{ secrets.CI_REGISTRY_PASSWORD }}
         run: |
           set -eu
 
@@ -85,21 +83,13 @@ jobs:
             exit 1
           fi
 
-          REGISTRY="${INPUT_REGISTRY}"
-
-          if [ -z "${REGISTRY}" ]; then
-            REGISTRY=$(
-              printf '%s\n' "${IMAGE_TAGS}" |
-              sed '/^$/d' |
-              head -n1 |
-              cut -d/ -f1
-            )
-          fi
-
-          if [ -z "${REGISTRY}" ]; then
-            echo "Unable to determine registry hostname."
-            exit 1
-          fi
+      - name: Authenticate crane
+        shell: sh
+        env:
+          USERNAME: ${{ secrets.CI_REGISTRY_USERNAME }}
+          PASSWORD: ${{ secrets.CI_REGISTRY_PASSWORD }}
+        run: |
+          set -eu
 
           echo "Logging into ${REGISTRY}"
 

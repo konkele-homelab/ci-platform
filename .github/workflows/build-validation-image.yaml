@@ -8,7 +8,8 @@ on:
       - main
 
     paths:
-      - "images/validation/Dockerfile"
+      - "images/validation/**"
+      - ".github/workflows/build-container.yaml"
       - ".github/workflows/build-validation-image.yaml"
 
 permissions:
@@ -26,4 +27,6 @@ jobs:
       context: images/validation
       runner: ci-build
 
-    secrets: inherit
+    secrets:
+      CI_REGISTRY_USERNAME: ${{ secrets.CI_REGISTRY_USERNAME }}
+      CI_REGISTRY_PASSWORD: ${{ secrets.CI_REGISTRY_PASSWORD }}

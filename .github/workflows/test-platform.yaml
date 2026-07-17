@@ -30,8 +30,9 @@ jobs:
       extra_tags: |
         type=raw,value=test
 
-    secrets: inherit
-
+    secrets:
+      CI_REGISTRY_USERNAME: ${{ secrets.CI_REGISTRY_USERNAME }}
+      CI_REGISTRY_PASSWORD: ${{ secrets.CI_REGISTRY_PASSWORD }}
 
   smoke:
     name: Smoke Test Platform Image
@@ -45,7 +46,9 @@ jobs:
       image: ${{ needs.build.outputs.reference }}
       expected_file: /message.txt
 
-    secrets: inherit
+    secrets:
+      CI_REGISTRY_USERNAME: ${{ secrets.CI_REGISTRY_USERNAME }}
+      CI_REGISTRY_PASSWORD: ${{ secrets.CI_REGISTRY_PASSWORD }}
 
 
   validate:
@@ -61,4 +64,6 @@ jobs:
       tags: |
         ${{ needs.build.outputs.reference }}
 
-    secrets: inherit
+    secrets:
+      CI_REGISTRY_USERNAME: ${{ secrets.CI_REGISTRY_USERNAME }}
+      CI_REGISTRY_PASSWORD: ${{ secrets.CI_REGISTRY_PASSWORD }}

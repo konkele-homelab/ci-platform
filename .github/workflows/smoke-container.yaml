@@ -2,7 +2,6 @@ name: Smoke Container Runtime
 
 on:
   workflow_call:
-
     inputs:
       image:
         description: Fully-qualified OCI image reference

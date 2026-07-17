@@ -124,6 +124,23 @@ jobs:
       tags: ${{ steps.tags.outputs.tags }}
 
     steps:
+      - name: Validate registry configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${REGISTRY}" ]]; then
+            echo "Registry is not configured."
+            echo "Set inputs.registry or repository variable CI_REGISTRY."
+            exit 1
+          fi
+
+          if [[ -z "${REGISTRY_NAMESPACE}" ]]; then
+            echo "Registry namespace is not configured."
+            echo "Set inputs.registry_namespace or repository variable CI_REGISTRY_NAMESPACE."
+            exit 1
+          fi
+
       - name: Checkout repository
         uses: actions/checkout@v4
 
