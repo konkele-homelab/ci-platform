@@ -16,13 +16,13 @@ The platform is designed to provide:
 * Repeatable validation patterns
 * Reduced duplicated workflow configuration
 * Standardized image publishing practices
-* Lightweight OCI image validation using upstream tooling
+* Controlled OCI image validation environments
 
 ---
 
 # High-Level Architecture
 
-```text id="8r5y7a"
+```text
                          Application Repository
 
                                   |
@@ -51,7 +51,10 @@ The platform is designed to provide:
              |                                         |
              v                                         v
 
-      Container Registry                    OCI Validation
+      Container Registry              container-validator image
+                                                  |
+                                                  v
+                                      OCI Validation Runtime
 ```
 
 ---
@@ -64,7 +67,7 @@ The platform uses separate workflows for separate responsibilities.
 
 Workflow:
 
-```text id="7r4h5d"
+```text
 .github/workflows/build-container.yaml
 ```
 
@@ -80,11 +83,35 @@ The build workflow should not perform application-specific validation.
 
 ---
 
+## Validation Image Build Workflow
+
+Workflow:
+
+```text
+.github/workflows/build-validation-image.yaml
+```
+
+Purpose:
+
+* Build the platform validation runtime image
+* Publish the validation image
+* Maintain a controlled validation environment
+
+The validation image is built from:
+
+```text
+images/validation/Dockerfile
+```
+
+The image provides the tooling required by validation workflows.
+
+---
+
 ## Runtime Validation Workflow
 
 Workflow:
 
-```text id="q8e6z1"
+```text
 .github/workflows/smoke-container.yaml
 ```
 
@@ -103,7 +130,7 @@ This validates that the image works as a runtime artifact.
 
 Workflow:
 
-```text id="x7t1mq"
+```text
 .github/workflows/validate-container.yaml
 ```
 
@@ -114,15 +141,13 @@ Purpose:
 * Confirm manifests exist
 * Validate published artifacts
 
-This workflow uses:
+This workflow executes inside the platform validation runtime image:
 
-```text id="5q2d0n"
-alpine/crane:latest
+```text
+container-validator
 ```
 
-as the validation runtime.
-
-The platform does not maintain a custom validation container image.
+The validation image is maintained by this repository and provides the required OCI inspection tooling.
 
 ---
 
@@ -130,7 +155,7 @@ The platform does not maintain a custom validation container image.
 
 The build workflow uses Docker Buildx with a remote BuildKit daemon.
 
-```text id="0czm4p"
+```text
 GitHub Actions Runner
 
         |
@@ -166,7 +191,7 @@ Remote BuildKit provides:
 
 Default endpoint:
 
-```text id="v1g4ol"
+```text
 tcp://buildkitd.buildkit.svc.cluster.local:1234
 ```
 
@@ -184,7 +209,7 @@ Published container images are stored in the configured registry namespace.
 
 Example:
 
-```text id="9z7h6p"
+```text
 registry.example.com/applications/my-image:latest
 ```
 
@@ -194,7 +219,7 @@ registry.example.com/applications/my-image:latest
 
 BuildKit cache is stored remotely:
 
-```text id="9gq6jl"
+```text
 <registry>/<cache_namespace>/<image>:buildcache-<platform>
 ```
 
@@ -212,7 +237,7 @@ The platform is designed for GitHub Actions Runner Controller (ARC).
 
 Typical flow:
 
-```text id="r6d2be"
+```text
 GitHub Actions
 
       |
@@ -240,7 +265,7 @@ Build / Validation Tooling
 
 The standard lifecycle is:
 
-```text id="4y4w0t"
+```text
 Developer Change
 
       |
@@ -259,34 +284,73 @@ Registry Publish
       v                v
 
 Runtime Test      OCI Validation
-      |
-      v
+      |                |
+      |                |
+      v                v
 
-Deployment Pipeline
+smoke-container   validate-container
+                       |
+                       v
+              container-validator image
 ```
 
 ---
 
 # Supporting Images
 
-Supporting images are limited to platform-specific test artifacts.
+Supporting images are stored under:
+
+```text
+images/
+```
 
 Current repository-managed images:
 
-```text id="3k5n1h"
+```text
 images/
-└── test/
+├── test/
+│   └── Dockerfile
+│
+└── validation/
     └── Dockerfile
 ```
 
-The platform intentionally avoids maintaining custom tooling images when upstream images provide the required functionality.
+---
 
-Examples:
+## Test Image
 
-| Purpose                 | Image                    |
-| ----------------------- | ------------------------ |
-| OCI registry validation | `alpine/crane:latest`    |
-| Platform smoke testing  | `images/test/Dockerfile` |
+The test image is used for platform workflow testing.
+
+Purpose:
+
+* Verify image building
+* Verify runtime execution
+* Validate workflow behavior
+
+---
+
+## Validation Image
+
+The validation image provides the runtime environment for OCI validation.
+
+Purpose:
+
+* Provide consistent validation tooling
+* Control validation dependencies
+* Avoid relying on external runtime images
+
+The validation image includes:
+
+* POSIX shell
+* crane OCI registry tooling
+* certificate bundles
+* required runtime utilities
+
+The image lifecycle is managed by:
+
+```text
+.github/workflows/build-validation-image.yaml
+```
 
 ---
 
@@ -329,13 +393,13 @@ Reusable workflows should clearly define:
 
 ---
 
-## Prefer Upstream Tooling
+## Controlled Tooling Environments
 
-The platform should use upstream images and tools when they satisfy requirements.
+Platform-owned container images should only be created when they provide value over external dependencies.
 
-Benefits:
+The validation image exists because it provides:
 
-* less maintenance
-* fewer custom build dependencies
-* easier upgrades
-* smaller platform surface area
+* reproducibility
+* controlled tool versions
+* predictable workflow execution
+* reduced external dependency risk

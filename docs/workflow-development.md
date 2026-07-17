@@ -129,7 +129,7 @@ Testing should verify:
 * image building
 * image publishing
 * runtime validation
-* registry validation
+* OCI registry validation
 
 ---
 
@@ -148,48 +148,116 @@ Supporting images should:
 * document their purpose
 * be tested through workflows
 
-The platform avoids maintaining custom images when suitable upstream images exist.
+The platform maintains custom images only when they provide platform-specific value.
 
-Examples:
+Current repository-managed images:
 
-| Purpose                | Image                    |
-| ---------------------- | ------------------------ |
-| Registry validation    | `alpine/crane:latest`    |
-| Platform smoke testing | `images/test/Dockerfile` |
+```text
+images/
+├── test/
+│   └── Dockerfile
+│
+└── validation/
+    └── Dockerfile
+```
 
-Custom workflow tooling images should only be added when upstream alternatives do not provide the required functionality.
+---
+
+# Platform Test Image
+
+The test image provides a minimal runtime artifact used to validate container workflow behavior.
+
+Purpose:
+
+* Verify image builds
+* Verify runtime execution
+* Confirm smoke testing behavior
+
+Location:
+
+```text
+images/test/Dockerfile
+```
+
+---
+
+# Validation Runtime Image
+
+The validation runtime image provides the execution environment for OCI image validation workflows.
+
+Location:
+
+```text
+images/validation/Dockerfile
+```
+
+The validation image includes:
+
+* POSIX shell
+* crane OCI registry tooling
+* certificate bundles
+* required runtime utilities
+
+The image is built by:
+
+```text
+.github/workflows/build-validation-image.yaml
+```
+
+and consumed by:
+
+```text
+.github/workflows/validate-container.yaml
+```
+
+The validation runtime image exists to provide:
+
+* reproducible validation execution
+* controlled tooling versions
+* consistent CI behavior
+* reduced dependency on external images
+
+---
+
+# Adding or Updating Supporting Images
+
+When modifying a supporting image:
+
+1. Update the Dockerfile
+2. Update related workflow documentation
+3. Verify the image builds successfully
+4. Verify consuming workflows continue to function
+
+Example:
+
+```text
+images/validation/Dockerfile
+```
+
+changes should be validated through:
+
+```text
+.github/workflows/build-validation-image.yaml
+```
 
 ---
 
 # Validation Tooling
 
-Registry validation uses the upstream:
+The validation workflow uses `crane` for OCI registry operations.
 
-```text
-alpine/crane:latest
-```
+The validation runtime provides:
 
-image.
-
-The validation workflow uses `crane` for:
-
-* registry authentication
+* registry authentication support
 * image digest verification
 * OCI manifest inspection
 * image configuration inspection
 
-The repository does not maintain a custom validation container image.
-
-Benefits:
-
-* reduced repository maintenance
-* fewer custom build dependencies
-* current upstream tooling
-* smaller validation runtime
+The validation tooling should remain isolated from application build workflows.
 
 ---
 
-# Versioning Workflows
+# Workflow Versioning
 
 Consumers should use version tags:
 
@@ -226,6 +294,7 @@ when changing:
 * behavior
 * architecture
 * validation tooling
+* supporting images
 
 ---
 
@@ -253,6 +322,7 @@ Verify:
 * image publishing
 * runtime validation
 * OCI registry validation
+* supporting image builds
 
 ---
 
@@ -298,7 +368,7 @@ The CI Platform should optimize for:
 Prefer:
 
 * reusable workflows over duplicated automation
-* upstream tooling over custom images
+* controlled platform images over unmanaged dependencies
 * explicit interfaces over hidden behavior
 * documented lifecycle patterns
 

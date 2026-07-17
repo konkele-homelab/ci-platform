@@ -9,7 +9,7 @@ The validation layer runs after an image build completes and provides two types 
 
 Together, these workflows verify that a container image can be consumed successfully after publication.
 
-Registry validation uses the upstream `alpine/crane` image. The platform no longer maintains a custom validation container image.
+Registry validation runs inside the platform-managed validation runtime image.
 
 ---
 
@@ -31,6 +31,9 @@ Container Registry
         v                v
 smoke-container.yaml  validate-container.yaml
 runtime validation    OCI image validation
+                             |
+                             v
+                  container-validator image
 ```
 
 The build workflow creates and publishes the image.
@@ -46,10 +49,57 @@ The validation workflows confirm:
 
 # Available Validation Workflows
 
-| Workflow                  | Purpose                                       |
-| ------------------------- | --------------------------------------------- |
-| `smoke-container.yaml`    | Verify container startup and runtime behavior |
-| `validate-container.yaml` | Verify published OCI images using crane       |
+| Workflow | Purpose |
+| --- | --- |
+| `smoke-container.yaml` | Verify container startup and runtime behavior |
+| `validate-container.yaml` | Verify published OCI images using crane |
+| `build-validation-image.yaml` | Build and publish the validation runtime image |
+
+---
+
+# Validation Runtime Image
+
+The platform maintains a dedicated validation runtime image.
+
+Source:
+
+```text
+images/validation/Dockerfile
+```
+
+The validation image provides:
+
+* POSIX shell execution
+* crane OCI registry tooling
+* certificate bundles
+* required runtime utilities
+* a consistent validation environment across runners
+
+The image is built by:
+
+```text
+.github/workflows/build-validation-image.yaml
+```
+
+The workflow publishes:
+
+```text
+<registry>/<namespace>/container-validator:latest
+```
+
+The validation workflow consumes this image by default:
+
+```yaml
+validation_image:
+  <registry>/<namespace>/container-validator:latest
+```
+
+Benefits:
+
+* consistent execution environment
+* controlled tooling versions
+* reproducible validation runs
+* reduced dependency on external images
 
 ---
 
@@ -90,12 +140,12 @@ jobs:
 
 # Smoke Test Inputs
 
-| Input           | Required | Default    | Description                             |
-| --------------- | :------: | ---------- | --------------------------------------- |
-| `image`         |    Yes   | —          | Container image reference to test       |
-| `runner`        |    No    | `ci-build` | GitHub Actions runner label             |
-| `expected_file` |    No    | empty      | File expected inside the container      |
-| `command`       |    No    | empty      | Command to execute inside the container |
+| Input | Required | Default | Description |
+| --- | :---: | --- | --- |
+| `image` | Yes | — | Container image reference to test |
+| `runner` | No | `ci-build` | GitHub Actions runner label |
+| `expected_file` | No | empty | File expected inside the container |
+| `command` | No | empty | Command to execute inside the container |
 
 ---
 
@@ -171,7 +221,7 @@ to authenticate before starting the container.
 
 ---
 
-# Image Validation
+# OCI Image Validation
 
 ## Overview
 
@@ -183,15 +233,13 @@ Workflow:
 .github/workflows/validate-container.yaml
 ```
 
-The workflow runs using:
+The workflow runs inside:
 
 ```text
-alpine/crane:latest
+container-validator
 ```
 
-The upstream image provides the `crane` CLI used to inspect OCI registry artifacts.
-
-No custom validation image is required.
+The validation image provides the `crane` CLI used to inspect OCI registry artifacts.
 
 No Docker daemon is required.
 
@@ -215,12 +263,12 @@ jobs:
 
 # Validation Inputs
 
-| Input              | Required | Default               | Description                        |
-| ------------------ | :------: | --------------------- | ---------------------------------- |
-| `tags`             |    Yes   | —                     | Newline-separated image references |
-| `runner`           |    No    | `ci-build`            | GitHub Actions runner label        |
-| `registry`         |    No    | auto-detected         | Container registry hostname        |
-| `validation_image` |    No    | `alpine/crane:latest` | OCI validation runtime image       |
+| Input | Required | Default | Description |
+| --- | :---: | --- | --- |
+| `tags` | Yes | — | Newline-separated image references |
+| `runner` | No | `ci-build` | GitHub Actions runner label |
+| `registry` | No | auto-detected | Container registry hostname |
+| `validation_image` | No | `container-validator:latest` | Validation runtime image |
 
 ---
 
@@ -255,6 +303,31 @@ Confirms the registry contains a valid OCI image manifest.
 ## Image Configuration
 
 Confirms the image configuration can be retrieved successfully.
+
+---
+
+# Validation Image Build Process
+
+The validation image is treated as a platform dependency.
+
+Changes to:
+
+```text
+images/validation/Dockerfile
+```
+
+trigger:
+
+```text
+.github/workflows/build-validation-image.yaml
+```
+
+The workflow:
+
+1. Builds the validation image
+2. Applies standard image metadata
+3. Publishes the image to the configured registry
+4. Makes the image available for validation workflows
 
 ---
 
@@ -379,14 +452,9 @@ Verify:
 
 Verify:
 
-* the validation image provides crane
+* the validation image contains crane
+* the validation image build completed successfully
 * the `validation_image` input has not been overridden incorrectly
-
-Default:
-
-```yaml
-validation_image: alpine/crane:latest
-```
 
 ---
 
@@ -409,7 +477,7 @@ Recommended:
 * Run image validation before promotion
 * Validate release tags before deployment
 * Keep validation separate from image building
-* Prefer upstream validation tooling over maintaining custom images
+* Maintain the validation runtime image as a versioned platform component
 
 The build workflow answers:
 

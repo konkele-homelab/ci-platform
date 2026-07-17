@@ -43,7 +43,9 @@ The repository is organized into a few primary areas:
 │
 ├── examples/          # Consumer workflow examples
 │
-├── images/            # Supporting container images used for platform testing
+├── images/            # Supporting container images used by platform workflows
+│   ├── test/          # Platform test application image
+│   └── validation/    # OCI validation runtime image
 │
 └── README.md          # Platform overview
 ```
@@ -53,7 +55,7 @@ The repository intentionally separates:
 * workflow implementation
 * documentation
 * consumer examples
-* supporting platform test images
+* supporting platform container images
 
 This allows consuming repositories to use the workflows without needing to understand the internal platform implementation.
 
@@ -114,9 +116,14 @@ The platform uses a container image lifecycle pipeline:
              v                     v
   smoke-container.yaml    validate-container.yaml
        runtime test          OCI validation
-```
+                                   ^
+                                   |
+                         container-validator image
+                                   ^
+                                   |
+                    build-validation-image.yaml
 
-The build workflow creates and publishes images.
+The build workflow creates and publishes application container images.
 
 The validation workflows verify that published images:
 
@@ -125,20 +132,19 @@ The validation workflows verify that published images:
 * have valid OCI registry metadata
 * can be retrieved and consumed successfully
 
-Runtime validation uses container execution.
-
-Registry validation uses the upstream `alpine/crane` image and does not require a custom validation container.
+OCI validation runs inside a dedicated validation runtime image maintained by this repository.
 
 ---
 
 # Available Workflows
 
-| Workflow                  | Purpose                                       |
-| ------------------------- | --------------------------------------------- |
-| `build-container.yaml`    | Build and publish container images            |
-| `smoke-container.yaml`    | Verify container startup and runtime behavior |
-| `validate-container.yaml` | Validate published OCI images using crane     |
-| `test-platform.yaml`      | Verify the CI platform itself                 |
+| Workflow | Purpose |
+| --- | --- |
+| build-container.yaml | Build and publish container images |
+| build-validation-image.yaml | Build the OCI validation runtime image |
+| smoke-container.yaml | Verify container startup and runtime behavior |
+| validate-container.yaml | Validate published OCI images using crane |
+| test-platform.yaml | Verify the CI platform itself |
 
 ---
 
@@ -198,10 +204,10 @@ extra_tags: |
 
 The calling repository must provide:
 
-| Variable                | Description                 |
-| ----------------------- | --------------------------- |
-| `CI_REGISTRY`           | Container registry hostname |
-| `CI_REGISTRY_NAMESPACE` | Registry namespace/project  |
+| Variable | Description |
+| --- | --- |
+| CI_REGISTRY | Container registry hostname |
+| CI_REGISTRY_NAMESPACE | Registry namespace/project |
 
 Example:
 
@@ -216,10 +222,10 @@ CI_REGISTRY_NAMESPACE=applications
 
 Required secrets:
 
-| Secret                 | Description                 |
-| ---------------------- | --------------------------- |
-| `CI_REGISTRY_USERNAME` | Container registry username |
-| `CI_REGISTRY_PASSWORD` | Container registry password |
+| Secret | Description |
+| --- | --- |
+| CI_REGISTRY_USERNAME | Container registry username |
+| CI_REGISTRY_PASSWORD | Container registry password |
 
 Recommended consumer pattern:
 
@@ -256,6 +262,69 @@ Benefits:
 * Faster rebuilds
 * Shared cache between runners
 * No dependency on runner-local storage
+
+---
+
+# Validation Runtime
+
+The platform maintains a dedicated validation runtime container image.
+
+Source:
+
+images/validation/Dockerfile
+
+The validation image provides:
+
+* POSIX shell execution
+* crane OCI registry tooling
+* container image inspection capabilities
+* a consistent validation environment across runners
+
+The image is built by:
+
+.github/workflows/build-validation-image.yaml
+
+The workflow publishes:
+
+<registry>/<namespace>/container-validator:latest
+
+The reusable validation workflow consumes this image:
+
+validation_image:
+  harbor.example.com/ci/container-validator:latest
+
+Benefits:
+
+* consistent validation environment
+* controlled tooling versions
+* reproducible validation runs
+* reduced dependency on third-party container images
+
+---
+
+# Validation Image Lifecycle
+
+The validation runtime image follows the same controlled lifecycle as other platform images.
+
+Changes to:
+
+images/validation/Dockerfile
+
+automatically trigger:
+
+.github/workflows/build-validation-image.yaml
+
+The workflow builds and publishes:
+
+container-validator:latest
+
+Consumers of:
+
+validate-container.yaml
+
+use this image as the execution environment for OCI validation.
+
+The validation image is intentionally maintained separately from application images because it provides CI infrastructure functionality rather than application runtime functionality.
 
 ---
 
@@ -317,41 +386,17 @@ These validate:
 * registry access
 * OCI image metadata
 
-Registry validation does not require a custom validation image.
+The platform test suite uses:
 
-The platform uses:
+images/test/Dockerfile
 
-```text
-alpine/crane:latest
-```
+to verify the complete container lifecycle.
 
-for OCI registry inspection.
+The validation runtime image is tested by:
 
----
+.github/workflows/build-validation-image.yaml
 
-# Validation Runtime
-
-The platform intentionally avoids maintaining a custom validation container image.
-
-Registry validation uses:
-
-```text
-alpine/crane:latest
-```
-
-This provides:
-
-* OCI registry inspection
-* image digest validation
-* manifest validation
-* image configuration validation
-
-Benefits:
-
-* reduced repository maintenance
-* fewer custom images
-* simpler workflow dependencies
-* current upstream validation tooling
+which ensures the validation environment remains reproducible and available for OCI validation workflows.
 
 ---
 
@@ -387,8 +432,12 @@ Detailed workflow documentation:
 
 ```text
 docs/container-build-workflow.md
+
 docs/container-validation-workflow.md
-```
+
+Workflow development guidance:
+
+docs/workflow-development.md
 
 Examples:
 

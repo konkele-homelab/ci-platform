@@ -1,0 +1,29 @@
+name: Build Validation Image
+
+on:
+  workflow_dispatch:
+
+  push:
+    branches:
+      - main
+
+    paths:
+      - "images/validation/Dockerfile"
+      - ".github/workflows/build-validation-image.yaml"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build Container Validation Image
+
+    uses: ./.github/workflows/build-container.yaml
+
+    with:
+      image_name: container-validator
+      dockerfile: images/validation/Dockerfile
+      context: images/validation
+      runner: ci-build
+
+    secrets: inherit
