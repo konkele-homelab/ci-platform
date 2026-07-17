@@ -29,8 +29,7 @@ jobs:
       image: ghcr.io/actions/actions-runner:latest
 
     outputs:
-      image_tag:
-        value: ${{ steps.tag.outputs.image_tag }}
+      image_tag: ${{ steps.tag.outputs.image_tag }}
 
     steps:
       - name: Determine image tag
