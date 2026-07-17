@@ -25,9 +25,9 @@ on:
       validation_image:
         description: |
           Container image used as the validation runtime.
-          Must include crane.
+          Must provide a POSIX shell.
         required: false
-        default: alpine/crane:latest
+        default: harbor.lab.konkel.us/ci/container-validator:latest
         type: string
 
     secrets:
@@ -52,24 +52,23 @@ jobs:
     container:
       image: ${{ inputs.validation_image }}
 
-      credentials:
-        username: ${{ secrets.CI_REGISTRY_USERNAME }}
-        password: ${{ secrets.CI_REGISTRY_PASSWORD }}
-
     env:
       IMAGE_TAGS: ${{ inputs.tags }}
       INPUT_REGISTRY: ${{ inputs.registry }}
 
     steps:
-      - name: Verify validation runtime
+      - name: Install crane
         shell: sh
         run: |
           set -eu
 
-          command -v crane >/dev/null 2>&1 || {
-            echo "crane was not found in validation image"
-            exit 1
-          }
+          apk add --no-cache ca-certificates curl tar
+
+          curl -sL \
+            https://github.com/google/go-containerregistry/releases/latest/download/go-containerregistry_Linux_x86_64.tar.gz \
+            | tar -xz -C /usr/local/bin crane
+
+          chmod +x /usr/local/bin/crane
 
           crane version
 
