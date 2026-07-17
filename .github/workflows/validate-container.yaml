@@ -127,17 +127,3 @@ jobs:
 
             echo "✓ ${tag}"
           done
-
-      - name: Validation summary
-        shell: sh
-        run: |
-          set -eu
-
-          echo
-          echo "Successfully validated:"
-
-          printf '%s\n' "${IMAGE_TAGS}" |
-          while IFS= read -r tag
-          do
-            [ -n "${tag}" ] && echo "  ✓ ${tag}"
-          done
