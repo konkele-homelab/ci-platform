@@ -18,7 +18,7 @@ The CI Platform provides reusable workflows for:
 * Generating standardized image metadata
 * Sharing registry-backed build cache
 * Running container runtime validation
-* Validating published images
+* Validating published OCI images using crane
 
 The platform is designed for:
 
@@ -43,7 +43,7 @@ The repository is organized into a few primary areas:
 │
 ├── examples/          # Consumer workflow examples
 │
-├── images/            # Supporting container images used by workflows
+├── images/            # Supporting container images used for platform testing
 │
 └── README.md          # Platform overview
 ```
@@ -53,7 +53,7 @@ The repository intentionally separates:
 * workflow implementation
 * documentation
 * consumer examples
-* supporting images
+* supporting platform test images
 
 This allows consuming repositories to use the workflows without needing to understand the internal platform implementation.
 
@@ -113,7 +113,7 @@ The platform uses a container image lifecycle pipeline:
              |                     |
              v                     v
   smoke-container.yaml    validate-container.yaml
-       runtime test          image validation
+       runtime test          OCI validation
 ```
 
 The build workflow creates and publishes images.
@@ -122,8 +122,12 @@ The validation workflows verify that published images:
 
 * start correctly
 * contain expected content
-* have valid registry metadata
-* can be consumed successfully
+* have valid OCI registry metadata
+* can be retrieved and consumed successfully
+
+Runtime validation uses container execution.
+
+Registry validation uses the upstream `alpine/crane` image and does not require a custom validation container.
 
 ---
 
@@ -133,7 +137,7 @@ The validation workflows verify that published images:
 | ------------------------- | --------------------------------------------- |
 | `build-container.yaml`    | Build and publish container images            |
 | `smoke-container.yaml`    | Verify container startup and runtime behavior |
-| `validate-container.yaml` | Validate published images and metadata        |
+| `validate-container.yaml` | Validate published OCI images using crane     |
 | `test-platform.yaml`      | Verify the CI platform itself                 |
 
 ---
@@ -311,7 +315,43 @@ These validate:
 * image publishing
 * container startup
 * registry access
-* image metadata
+* OCI image metadata
+
+Registry validation does not require a custom validation image.
+
+The platform uses:
+
+```text
+alpine/crane:latest
+```
+
+for OCI registry inspection.
+
+---
+
+# Validation Runtime
+
+The platform intentionally avoids maintaining a custom validation container image.
+
+Registry validation uses:
+
+```text
+alpine/crane:latest
+```
+
+This provides:
+
+* OCI registry inspection
+* image digest validation
+* manifest validation
+* image configuration validation
+
+Benefits:
+
+* reduced repository maintenance
+* fewer custom images
+* simpler workflow dependencies
+* current upstream validation tooling
 
 ---
 
@@ -347,6 +387,7 @@ Detailed workflow documentation:
 
 ```text
 docs/container-build-workflow.md
+docs/container-validation-workflow.md
 ```
 
 Examples:

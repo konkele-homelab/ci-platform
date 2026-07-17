@@ -16,6 +16,7 @@ The platform is designed to provide:
 * Repeatable validation patterns
 * Reduced duplicated workflow configuration
 * Standardized image publishing practices
+* Lightweight OCI image validation using upstream tooling
 
 ---
 
@@ -46,17 +47,11 @@ The platform is designed to provide:
              v                                         v
 
        Remote BuildKit                    smoke-container.yaml
-             |
-             |
-             v
+             |                            validate-container.yaml
+             |                                         |
+             v                                         v
 
-      Container Registry
-
-             |
-             |
-             v
-
-    validate-container.yaml
+      Container Registry                    OCI Validation
 ```
 
 ---
@@ -104,7 +99,7 @@ This validates that the image works as a runtime artifact.
 
 ---
 
-## Image Validation Workflow
+## OCI Image Validation Workflow
 
 Workflow:
 
@@ -115,11 +110,19 @@ Workflow:
 Purpose:
 
 * Verify registry availability
-* Inspect image metadata
+* Inspect OCI image metadata
 * Confirm manifests exist
 * Validate published artifacts
 
-This validates that the registry contains a usable image.
+This workflow uses:
+
+```text id="5q2d0n"
+alpine/crane:latest
+```
+
+as the validation runtime.
+
+The platform does not maintain a custom validation container image.
 
 ---
 
@@ -228,7 +231,7 @@ Workflow Container
 
       v
 
-Docker Buildx / Validation Tools
+Build / Validation Tooling
 ```
 
 ---
@@ -255,13 +258,35 @@ Registry Publish
       |                |
       v                v
 
-Runtime Test      Image Validation
-
+Runtime Test      OCI Validation
       |
       v
 
 Deployment Pipeline
 ```
+
+---
+
+# Supporting Images
+
+Supporting images are limited to platform-specific test artifacts.
+
+Current repository-managed images:
+
+```text id="3k5n1h"
+images/
+└── test/
+    └── Dockerfile
+```
+
+The platform intentionally avoids maintaining custom tooling images when upstream images provide the required functionality.
+
+Examples:
+
+| Purpose                 | Image                    |
+| ----------------------- | ------------------------ |
+| OCI registry validation | `alpine/crane:latest`    |
+| Platform smoke testing  | `images/test/Dockerfile` |
 
 ---
 
@@ -301,3 +326,16 @@ Reusable workflows should clearly define:
 * secrets
 * outputs
 * expected behavior
+
+---
+
+## Prefer Upstream Tooling
+
+The platform should use upstream images and tools when they satisfy requirements.
+
+Benefits:
+
+* less maintenance
+* fewer custom build dependencies
+* easier upgrades
+* smaller platform surface area

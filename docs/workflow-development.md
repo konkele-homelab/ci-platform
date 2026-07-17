@@ -10,7 +10,7 @@ The goal is to keep workflows reusable, predictable, and safe for consumption by
 
 Reusable workflows should be created under:
 
-```text id="y5b7x8"
+```text
 .github/workflows/
 ```
 
@@ -23,7 +23,7 @@ on:
 
 Example:
 
-```yaml id="xj1t4q"
+```yaml
 name: Example Workflow
 
 on:
@@ -119,7 +119,7 @@ Changes should be tested using platform workflows.
 
 Available validation:
 
-```text id="m4q0nd"
+```text
 .github/workflows/test-platform.yaml
 ```
 
@@ -137,15 +137,8 @@ Testing should verify:
 
 Supporting images are stored under:
 
-```text id="w3q8k0"
-images/
-```
-
-Examples:
-
 ```text
-images/test/
-images/validation/
+images/
 ```
 
 Supporting images should:
@@ -154,6 +147,45 @@ Supporting images should:
 * be reproducible
 * document their purpose
 * be tested through workflows
+
+The platform avoids maintaining custom images when suitable upstream images exist.
+
+Examples:
+
+| Purpose                | Image                    |
+| ---------------------- | ------------------------ |
+| Registry validation    | `alpine/crane:latest`    |
+| Platform smoke testing | `images/test/Dockerfile` |
+
+Custom workflow tooling images should only be added when upstream alternatives do not provide the required functionality.
+
+---
+
+# Validation Tooling
+
+Registry validation uses the upstream:
+
+```text
+alpine/crane:latest
+```
+
+image.
+
+The validation workflow uses `crane` for:
+
+* registry authentication
+* image digest verification
+* OCI manifest inspection
+* image configuration inspection
+
+The repository does not maintain a custom validation container image.
+
+Benefits:
+
+* reduced repository maintenance
+* fewer custom build dependencies
+* current upstream tooling
+* smaller validation runtime
 
 ---
 
@@ -193,6 +225,7 @@ when changing:
 * workflow outputs
 * behavior
 * architecture
+* validation tooling
 
 ---
 
@@ -218,7 +251,8 @@ Verify:
 
 * workflow execution
 * image publishing
-* validation success
+* runtime validation
+* OCI registry validation
 
 ---
 
@@ -261,4 +295,11 @@ The CI Platform should optimize for:
 * discoverability
 * minimal consumer configuration
 
-Prefer improving shared workflows over adding duplicated repository-specific automation.
+Prefer:
+
+* reusable workflows over duplicated automation
+* upstream tooling over custom images
+* explicit interfaces over hidden behavior
+* documented lifecycle patterns
+
+Improve shared workflows rather than adding duplicated repository-specific automation.

@@ -2,12 +2,14 @@
 
 The Container Validation workflows provide reusable GitHub Actions workflows for verifying that published container images are functional, accessible, and correctly published.
 
-The validation layer is designed to run after an image build completes and provides two types of validation:
+The validation layer runs after an image build completes and provides two types of validation:
 
 * Runtime validation
 * Registry/image validation
 
 Together, these workflows verify that a container image can be consumed successfully after publication.
+
+Registry validation uses the upstream `alpine/crane` image. The platform no longer maintains a custom validation container image.
 
 ---
 
@@ -28,7 +30,7 @@ Container Registry
         |                |
         v                v
 smoke-container.yaml  validate-container.yaml
-runtime validation    image validation
+runtime validation    OCI image validation
 ```
 
 The build workflow creates and publishes the image.
@@ -37,17 +39,17 @@ The validation workflows confirm:
 
 * the image can start
 * the image contains expected content
-* the registry contains valid image data
+* the registry contains valid OCI image data
 * consumers can retrieve the published artifact
 
 ---
 
 # Available Validation Workflows
 
-| Workflow                  | Purpose                                            |
-| ------------------------- | -------------------------------------------------- |
-| `smoke-container.yaml`    | Verify container startup and runtime behavior      |
-| `validate-container.yaml` | Verify published image metadata and registry state |
+| Workflow                  | Purpose                                       |
+| ------------------------- | --------------------------------------------- |
+| `smoke-container.yaml`    | Verify container startup and runtime behavior |
+| `validate-container.yaml` | Verify published OCI images using crane       |
 
 ---
 
@@ -173,7 +175,7 @@ to authenticate before starting the container.
 
 ## Overview
 
-The image validation workflow verifies that published container images exist and contain valid registry metadata.
+The image validation workflow verifies that published OCI container images exist and contain valid registry metadata.
 
 Workflow:
 
@@ -181,7 +183,17 @@ Workflow:
 .github/workflows/validate-container.yaml
 ```
 
-The workflow uses registry tooling to inspect published images.
+The workflow runs using:
+
+```text
+alpine/crane:latest
+```
+
+The upstream image provides the `crane` CLI used to inspect OCI registry artifacts.
+
+No custom validation image is required.
+
+No Docker daemon is required.
 
 ---
 
@@ -193,7 +205,8 @@ jobs:
     uses: your-org/ci-platform/.github/workflows/validate-container.yaml@v1
 
     with:
-      tags: ${{ needs.build.outputs.tags }}
+      tags: |
+        ${{ needs.build.outputs.reference }}
 
     secrets: inherit
 ```
@@ -202,12 +215,12 @@ jobs:
 
 # Validation Inputs
 
-| Input             | Required | Default            | Description                        |
-| ----------------- | :------: | ------------------ | ---------------------------------- |
-| `tags`            |    Yes   | —                  | Newline-separated image references |
-| `runner`          |    No    | `ci-build`         | GitHub Actions runner label        |
-| `registry`        |    No    | `vars.CI_REGISTRY` | Container registry hostname        |
-| `container_image` |    Yes   | —                  | Validation runtime image           |
+| Input              | Required | Default               | Description                        |
+| ------------------ | :------: | --------------------- | ---------------------------------- |
+| `tags`             |    Yes   | —                     | Newline-separated image references |
+| `runner`           |    No    | `ci-build`            | GitHub Actions runner label        |
+| `registry`         |    No    | auto-detected         | Container registry hostname        |
+| `validation_image` |    No    | `alpine/crane:latest` | OCI validation runtime image       |
 
 ---
 
@@ -215,7 +228,7 @@ jobs:
 
 For each image reference, the workflow verifies:
 
-## Authentication
+## Registry Authentication
 
 Confirms the workflow can access the registry.
 
@@ -235,7 +248,7 @@ sha256:abcdef123456...
 
 ## Image Manifest
 
-Confirms the registry contains a valid image manifest.
+Confirms the registry contains a valid OCI image manifest.
 
 ---
 
@@ -280,7 +293,8 @@ jobs:
     uses: your-org/ci-platform/.github/workflows/validate-container.yaml@v1
 
     with:
-      tags: ${{ needs.build.outputs.tags }}
+      tags: |
+        ${{ needs.build.outputs.reference }}
 
     secrets: inherit
 ```
@@ -297,7 +311,7 @@ Publish
 Runtime Smoke Test
  |
  v
-Registry Validation
+OCI Registry Validation
 ```
 
 ---
@@ -361,6 +375,21 @@ Verify:
 
 ---
 
+## crane Not Found
+
+Verify:
+
+* the validation image provides crane
+* the `validation_image` input has not been overridden incorrectly
+
+Default:
+
+```yaml
+validation_image: alpine/crane:latest
+```
+
+---
+
 ## Registry Validation Fails
 
 Verify:
@@ -368,7 +397,7 @@ Verify:
 * registry credentials
 * image tag exists
 * image push completed successfully
-* registry permissions
+* registry permissions allow read access
 
 ---
 
@@ -380,6 +409,7 @@ Recommended:
 * Run image validation before promotion
 * Validate release tags before deployment
 * Keep validation separate from image building
+* Prefer upstream validation tooling over maintaining custom images
 
 The build workflow answers:
 

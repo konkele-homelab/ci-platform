@@ -10,7 +10,6 @@ on:
     paths:
       - ".github/workflows/**"
       - "images/test/**"
-      - "images/validation/**"
 
 
 permissions:
@@ -59,7 +58,7 @@ jobs:
     uses: ./.github/workflows/validate-container.yaml
 
     with:
-      tags: ${{ needs.build.outputs.tags }}
-      image: ${{ needs.build.outputs.reference }}
+      tags: |
+        ${{ needs.build.outputs.reference }}
 
     secrets: inherit

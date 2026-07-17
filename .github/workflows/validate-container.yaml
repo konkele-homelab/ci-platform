@@ -22,10 +22,12 @@ on:
         required: false
         type: string
 
-      image:
+      validation_image:
         description: |
-          Container image used to run the validation.
-        required: true
+          Container image used as the validation runtime.
+          Must include crane.
+        required: false
+        default: alpine/crane:latest
         type: string
 
     secrets:
@@ -48,7 +50,7 @@ jobs:
       - ${{ inputs.runner }}
 
     container:
-      image: ${{ inputs.image }}
+      image: ${{ inputs.validation_image }}
 
       credentials:
         username: ${{ secrets.CI_REGISTRY_USERNAME }}
@@ -60,29 +62,44 @@ jobs:
 
     steps:
       - name: Verify validation runtime
+        shell: sh
         run: |
           set -eu
 
-          command -v crane >/dev/null
+          command -v crane >/dev/null 2>&1 || {
+            echo "crane was not found in validation image"
+            exit 1
+          }
 
           crane version
 
       - name: Authenticate crane
+        shell: sh
         env:
           USERNAME: ${{ secrets.CI_REGISTRY_USERNAME }}
           PASSWORD: ${{ secrets.CI_REGISTRY_PASSWORD }}
         run: |
           set -eu
 
-          [ -n "${IMAGE_TAGS}" ]
+          if [ -z "${IMAGE_TAGS}" ]; then
+            echo "No image tags were provided."
+            exit 1
+          fi
 
           REGISTRY="${INPUT_REGISTRY}"
 
           if [ -z "${REGISTRY}" ]; then
-            REGISTRY="$(printf '%s\n' "${IMAGE_TAGS}" \
-              | sed '/^$/d' \
-              | head -n1 \
-              | cut -d/ -f1)"
+            REGISTRY=$(
+              printf '%s\n' "${IMAGE_TAGS}" |
+              sed '/^$/d' |
+              head -n1 |
+              cut -d/ -f1
+            )
+          fi
+
+          if [ -z "${REGISTRY}" ]; then
+            echo "Unable to determine registry hostname."
+            exit 1
           fi
 
           echo "Logging into ${REGISTRY}"
@@ -92,14 +109,15 @@ jobs:
             --username "${USERNAME}" \
             --password "${PASSWORD}"
 
-      - name: Validate images
+      - name: Validate published images
+        shell: sh
         run: |
           set -eu
 
           printf '%s\n' "${IMAGE_TAGS}" |
           while IFS= read -r tag
           do
-            [ -z "${tag}" ] && continue
+            [ -n "${tag}" ] || continue
 
             echo
             echo "Validating ${tag}"
@@ -112,6 +130,7 @@ jobs:
           done
 
       - name: Validation summary
+        shell: sh
         run: |
           set -eu
 
